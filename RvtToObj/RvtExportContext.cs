@@ -378,10 +378,7 @@ namespace RvtToObj
 #elif R2018
                 case AssetPropertyType.String:
 #endif
-                    Asset connectedAsset = prop.GetConnectedProperty(0) as Asset;
                     AssetPropertyString val = prop as AssetPropertyString;
-                    if (val.Name == "UnifiedBitmapSchema")
-                        TaskDialog.Show("Connected bitmap", String.Format("{0} from {2}: {1}", prop.Name, val.Value, connectedAsset.LibraryName));
                     objWriter.WriteLine(val.Name + "= " + val.Value + ";" + val.IsReadOnly.ToString());
                     break;
 #if R2016
