@@ -21,7 +21,8 @@ namespace RvtToObj
             = "newmtl {0}\r\n"
             + "ka {1} {2} {3}\r\n"
             + "Kd {1} {2} {3}\r\n"
-            + "d {4}";
+            + "Ns {4}\r\n"
+            + "d {5}";
         const string _mtl_mtllib = "mtllib {0}";
         const string _mtl_vertex = "v {0} {1} {2}";
         const string _mtl_normal = "vn {0} {1} {2}";
@@ -263,18 +264,21 @@ namespace RvtToObj
                   : this[p] = Count;
             }
         }
-#endregion // VertexLookupInt
+        #endregion // VertexLookupInt
 
-        
+
         //材质信息
         Color currentColor;
         int currentTransparencyint;
         double currentTransparencyDouble;
         int currentShiniess;
+
         ElementId currentMterialId = ElementId.InvalidElementId;
         int materialIndex = 0;
         Dictionary<string, Color> colors = new Dictionary<string, Color>();
         Dictionary<string, double> transparencys = new Dictionary<string, double>();
+        Dictionary<string, int> Shiniess = new Dictionary<string, int>();
+
 
         //几何信息
         List<int> face = new List<int>();
@@ -303,12 +307,13 @@ namespace RvtToObj
             this._objlibraryAsset = objlibraryAsset;
         }
 
+        private static string NormalizeMatName(string matName)
+        {
+            return matName.Replace(" ", "").Replace("\t", "");
+        }
+
         public void ReadAsset(Asset asset)
         {
-            // Get the asset name, type and library name.
-            //AssetType type = asset.AssetType;
-            //string name = asset.Name;
-            //string libraryName = asset.LibraryName;
             var tempPath = Path.Combine(Path.GetTempPath(), "c.txt");
             FileStream fs = new FileStream(tempPath, FileMode.OpenOrCreate);
             StreamWriter sw = new StreamWriter(fs);
@@ -465,6 +470,63 @@ namespace RvtToObj
             }
         }
 
+        public void SaveMaterial(MaterialNode node)
+        {
+            if (currentMterialId != node.MaterialId)
+            {
+                var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
+                face.Add(-1);
+                face.Add(trgb);
+                face.Add(currentTransparencyint);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                currentMterialId = node.MaterialId;
+
+                var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
+
+                if (!transparencys.ContainsKey(ttrgb))
+                {
+                    transparencys.Add(ttrgb, 1.0 - currentTransparencyDouble);
+                }
+
+                if (!colors.ContainsKey(ttrgb))
+                {
+                    colors.Add(ttrgb, currentColor);
+                }
+
+                if (!Shiniess.ContainsKey(ttrgb))
+                {
+                    Shiniess.Add(ttrgb, currentShiniess);
+                }
+
+            }
+            else
+            {
+                if (materialIndex == 0)
+                {
+                    var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
+                    face.Add(-1);
+                    face.Add(trgb);
+                    face.Add(currentTransparencyint);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    currentMterialId = node.MaterialId;
+                    var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
+                    colors.Add(ttrgb, currentColor);
+                    transparencys.Add(ttrgb, currentTransparencyint);
+                    Shiniess.Add(ttrgb, currentShiniess);
+                }
+            }
+        }
+
         public bool IsCanceled()
         {
             return false;
@@ -501,7 +563,7 @@ namespace RvtToObj
             currentShiniess = node.Glossiness;
             currentTransparencyint = Convert.ToInt32(node.Transparency);
 
-
+            #region ///读取位图
             if (node.MaterialId != ElementId.InvalidElementId)
             {
                 Asset theAsset = node.GetAppearance();
@@ -517,7 +579,6 @@ namespace RvtToObj
                     AppearanceAssetElement appearanceElem = _doc.GetElement(appearanceId) as AppearanceAssetElement;
                     theAsset = appearanceElem.GetRenderingAsset();
                 }
-                
 
                 if (theAsset.Size == 0)
                 {
@@ -536,82 +597,10 @@ namespace RvtToObj
                 {
                     ReadAsset(theAsset);
                 }
-
-
-
-                //AssetProperty aProperty = theAsset[assetIdx];
-                //if (aProperty.NumberOfConnectedProperties < 1)
-                //    continue;
-                //// Find first connected property.
-                //// Should work for all current (2018) schemas.
-                //// Safer code would loop through all connected
-                //// properties based on the number provided.
-                //Asset connectedAsset = aProperty.GetConnectedProperty(0) as Asset;
-                //// We are only checking for bitmap connected assets.
-                //if (connectedAsset.Name == "UnifiedBitmapSchema")
-                //{
-                //    // This line is 2018.1 & up because of the
-                //    // property reference to UnifiedBitmap
-                //    // .UnifiedbitmapBitmap. In earlier versions,
-                //    // you can still reference the string name
-                //    // instead: "unifiedbitmap_Bitmap"
-                //    AssetPropertyString path = connectedAsset["unifiedbitmap_Bitmap"] as AssetPropertyString;
-                //    // This will be a relative path to the
-                //    // built -in materials folder, addiitonal
-                //    // render appearance folder, or an
-                //    // absolute path.
-                //    TaskDialog.Show("Connected bitmap", String.Format("{0} from {2}: {1}", aProperty.Name, path.Value, connectedAsset.LibraryName));
+                #endregion
             }
-
-            if (currentMterialId != node.MaterialId)
-            {
-                var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
-                face.Add(-1);
-                face.Add(trgb);
-                face.Add(currentTransparencyint);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                currentMterialId = node.MaterialId;
-
-
-                var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
-
-                if (!transparencys.ContainsKey(ttrgb))
-                {
-                    transparencys.Add(ttrgb, 1.0 - currentTransparencyDouble);
-                }
-
-                if (!colors.ContainsKey(ttrgb))
-                {
-                    colors.Add(ttrgb, currentColor);
-                }              
-            }
-            else
-            {
-                if (materialIndex == 0)
-                {
-                    var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
-                    face.Add(-1);
-                    face.Add(trgb);
-                    face.Add(currentTransparencyint);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    currentMterialId = node.MaterialId;
-                    var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
-                    colors.Add(ttrgb, currentColor);
-                    transparencys.Add(ttrgb, currentTransparencyint);
-                }
-            }
+            SaveMaterial(node);
             materialIndex++;
-
         }
 
         public RenderNodeAction OnFaceBegin(FaceNode node)
@@ -701,10 +690,8 @@ namespace RvtToObj
             Debug.WriteLine("OnViewEnd: Id: " + elementId.IntegerValue);
         }
 
-        public void Finish()
+        private void WriteObj()
         {
-            string material_library_path = null;
-            material_library_path = Path.ChangeExtension(_filename, "mtl");
             using (StreamWriter s = new StreamWriter(_filename))
             {
                 s.WriteLine(_mtl_mtllib, "model.mtl");
@@ -723,7 +710,7 @@ namespace RvtToObj
                 {
                     s.WriteLine(_mtl_uv, key.X, key.Y);
                 }
-                
+
                 int i = 0;
                 int n = face.Count;
                 while (i < n)
@@ -739,29 +726,40 @@ namespace RvtToObj
                     int i7 = face[i++];
                     int i8 = face[i++];
                     int i9 = face[i++];
-                    if (-1==i1)
+                    if (-1 == i1)
                     {
-                        s.WriteLine($"usemtl {Util.ColorTransparencyString(Util.IntToColorTransparency(i2,out i3),i3)}");
+                        s.WriteLine($"usemtl {Util.ColorTransparencyString(Util.IntToColorTransparency(i2, out i3), i3)}");
                     }
                     else
                     {
                         s.WriteLine($"f {i1 + 1}/{i4 + 1}/{i7 + 1} {i2 + 1}/{i5 + 1}/{i8 + 1} {i3 + 1}/{i6 + 1}/{i9 + 1}");
                     }
-                    
+
                 }
             }
+        }
+
+        private void WriteMtl()
+        {
             using (StreamWriter s = new StreamWriter(Path.GetDirectoryName(_filename) + "\\model.mtl"))
             {
                 foreach (KeyValuePair<string, Color> color in colors)
                 {
-                    s.WriteLine(_mtl_newmtl_d, 
+                    s.WriteLine(_mtl_newmtl_d,
                                 color.Key,
-                                color.Value.Red/256.0,
-                                color.Value.Green/256.0,
-                                color.Value.Blue/256.0, 
+                                color.Value.Red / 256.0,
+                                color.Value.Green / 256.0,
+                                color.Value.Blue / 256.0,
+                                Shiniess[color.Key],
                                 transparencys[color.Key]);
                 }
             }
+        }
+
+        public void Finish()
+        {
+            WriteObj();
+            WriteMtl();
             //TaskDialog.Show("RvtToObj", "导出成功！");
         }
 

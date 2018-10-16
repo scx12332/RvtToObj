@@ -31,13 +31,32 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Revit.IFC.Common">
+      <HintPath>..\..\2018\2018\Revit.IFC.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="Revit.IFC.Export">
+      <HintPath>..\..\2018\2018\Revit.IFC.Export.dll</HintPath>
+    </Reference>
+    <Reference Include="Revit.IFC.Import">
+      <HintPath>..\..\2018\2018\Revit.IFC.Import.dll</HintPath>
+    </Reference>
+    <Reference Include="RevitAddInUtility">
+      <HintPath>..\..\2018\2018\RevitAddInUtility.dll</HintPath>
+    </Reference>
     <Reference Include="RevitAPI">
-      <HintPath>C:\Program Files\Autodesk\Revit 2016\RevitAPI.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>..\..\2018\2018\RevitAPI.dll</HintPath>
+    </Reference>
+    <Reference Include="RevitAPIBrowserUtils">
+      <HintPath>..\..\2018\2018\RevitAPIBrowserUtils.dll</HintPath>
+    </Reference>
+    <Reference Include="RevitAPIFoundation">
+      <HintPath>..\..\2018\2018\RevitAPIFoundation.dll</HintPath>
+    </Reference>
+    <Reference Include="RevitAPIIFC">
+      <HintPath>..\..\2018\2018\RevitAPIIFC.dll</HintPath>
     </Reference>
     <Reference Include="RevitAPIUI">
-      <HintPath>C:\Program Files\Autodesk\Revit 2016\RevitAPIUI.dll</HintPath>
-      <Private>False</Private>
+      <HintPath>..\..\2018\2018\RevitAPIUI.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

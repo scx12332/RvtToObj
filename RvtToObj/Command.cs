@@ -7,8 +7,6 @@ using Autodesk.Revit.Utility;
 #elif R2018
 using Autodesk.Revit.DB.Visual;
 #endif
-using System.Collections.Generic;
-using System.Text;
 using System;
 using System.Windows.Forms;
 
@@ -18,7 +16,6 @@ namespace RvtToObj
     public class Command : IExternalCommand, IExternalCommandAvailability
     {
         string foldPath = string.Empty;
-        public static Color DefaultColor = new Color(127, 127, 127);    //默认灰色
 
         /// <summary>
         /// 导出三维视图，调用CustomExporter.Export
