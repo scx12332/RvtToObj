@@ -378,7 +378,10 @@ namespace RvtToObj
 #elif R2018
                 case AssetPropertyType.String:
 #endif
+                    Asset connectedAsset = prop.GetConnectedProperty(0) as Asset;
                     AssetPropertyString val = prop as AssetPropertyString;
+                    if (val.Name == "UnifiedBitmapSchema")
+                        TaskDialog.Show("Connected bitmap", String.Format("{0} from {2}: {1}", prop.Name, val.Value, connectedAsset.LibraryName));
                     objWriter.WriteLine(val.Name + "= " + val.Value + ";" + val.IsReadOnly.ToString());
                     break;
 #if R2016
@@ -470,63 +473,6 @@ namespace RvtToObj
             }
         }
 
-        public void SaveMaterial(MaterialNode node)
-        {
-            if (currentMterialId != node.MaterialId)
-            {
-                var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
-                face.Add(-1);
-                face.Add(trgb);
-                face.Add(currentTransparencyint);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                face.Add(-2);
-                currentMterialId = node.MaterialId;
-
-                var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
-
-                if (!transparencys.ContainsKey(ttrgb))
-                {
-                    transparencys.Add(ttrgb, 1.0 - currentTransparencyDouble);
-                }
-
-                if (!colors.ContainsKey(ttrgb))
-                {
-                    colors.Add(ttrgb, currentColor);
-                }
-
-                if (!Shiniess.ContainsKey(ttrgb))
-                {
-                    Shiniess.Add(ttrgb, currentShiniess);
-                }
-
-            }
-            else
-            {
-                if (materialIndex == 0)
-                {
-                    var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
-                    face.Add(-1);
-                    face.Add(trgb);
-                    face.Add(currentTransparencyint);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    face.Add(-2);
-                    currentMterialId = node.MaterialId;
-                    var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
-                    colors.Add(ttrgb, currentColor);
-                    transparencys.Add(ttrgb, currentTransparencyint);
-                    Shiniess.Add(ttrgb, currentShiniess);
-                }
-            }
-        }
-
         public bool IsCanceled()
         {
             return false;
@@ -599,7 +545,61 @@ namespace RvtToObj
                 }
                 #endregion
             }
-            SaveMaterial(node);
+
+            if (currentMterialId != node.MaterialId)
+            {
+                var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
+                face.Add(-1);
+                face.Add(trgb);
+                face.Add(currentTransparencyint);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                face.Add(-2);
+                currentMterialId = node.MaterialId;
+
+                var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
+
+                if (!transparencys.ContainsKey(ttrgb))
+                {
+                    transparencys.Add(ttrgb, 1.0 - currentTransparencyDouble);
+                }
+
+                if (!colors.ContainsKey(ttrgb))
+                {
+                    colors.Add(ttrgb, currentColor);
+                }
+
+                if (!Shiniess.ContainsKey(ttrgb))
+                {
+                    Shiniess.Add(ttrgb, currentShiniess);
+                }
+
+            }
+            else
+            {
+                if (materialIndex == 0)
+                {
+                    var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
+                    face.Add(-1);
+                    face.Add(trgb);
+                    face.Add(currentTransparencyint);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    face.Add(-2);
+                    currentMterialId = node.MaterialId;
+                    var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
+                    colors.Add(ttrgb, currentColor);
+                    transparencys.Add(ttrgb, currentTransparencyint);
+                    Shiniess.Add(ttrgb, currentShiniess);
+                }
+            }
+
             materialIndex++;
         }
 
@@ -690,8 +690,10 @@ namespace RvtToObj
             Debug.WriteLine("OnViewEnd: Id: " + elementId.IntegerValue);
         }
 
-        private void WriteObj()
+        public void Finish()
         {
+            string material_library_path = null;
+            material_library_path = Path.ChangeExtension(_filename,"mtl");
             using (StreamWriter s = new StreamWriter(_filename))
             {
                 s.WriteLine(_mtl_mtllib, "model.mtl");
@@ -737,10 +739,7 @@ namespace RvtToObj
 
                 }
             }
-        }
 
-        private void WriteMtl()
-        {
             using (StreamWriter s = new StreamWriter(Path.GetDirectoryName(_filename) + "\\model.mtl"))
             {
                 foreach (KeyValuePair<string, Color> color in colors)
@@ -754,12 +753,6 @@ namespace RvtToObj
                                 transparencys[color.Key]);
                 }
             }
-        }
-
-        public void Finish()
-        {
-            WriteObj();
-            WriteMtl();
             //TaskDialog.Show("RvtToObj", "导出成功！");
         }
 

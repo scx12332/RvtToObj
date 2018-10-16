@@ -52,7 +52,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Command.cs" />
-    <Compile Include="ContainersInfo.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RvtExportContext.cs" />
     <Compile Include="Util.cs" />
