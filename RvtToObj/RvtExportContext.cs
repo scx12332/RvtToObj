@@ -10,33 +10,37 @@ using Autodesk.Revit.DB.Visual;
 #endif
 using System.Linq;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace RvtToObj
 {
     internal class RvtExportContext : IExportContext
     {
 
-#region mtl statement format strings
+        #region mtl statement format strings
+        const string _abstract
+            = "RVT TO OBJ    Created Time:{0}";
         const string _mtl_newmtl_d
-            = "newmtl {0}\r\n"
+            = "\r\nnewmtl {0}\r\n"
             + "ka {1} {2} {3}\r\n"
             + "Kd {1} {2} {3}\r\n"
             + "Ns {4}\r\n"
             + "d {5}";
+    
         const string _mtl_mtllib = "mtllib {0}";
         const string _mtl_vertex = "v {0} {1} {2}";
         const string _mtl_normal = "vn {0} {1} {2}";
         const string _mtl_uv = "vt {0} {1}";
-#endregion
+        #endregion
 
-#region VertexLookupXyz
+        #region VertexLookupXyz
         /// <summary>
         /// A vertex lookup class to eliminate 
         /// duplicate vertex definitions.
         /// </summary>
         class VertexLookupXyz : Dictionary<XYZ, int>
         {
-#region XyzEqualityComparer
+            #region XyzEqualityComparer
             /// <summary>
             /// Define equality for Revit XYZ points.
             /// Very rough tolerance, as used by Revit itself.
@@ -57,7 +61,7 @@ namespace RvtToObj
                     return Util.PointString(p).GetHashCode();
                 }
             }
-#endregion // XyzEqualityComparer
+            #endregion // XyzEqualityComparer
 
             public VertexLookupXyz()
               : base(new XyzEqualityComparer())
@@ -75,9 +79,9 @@ namespace RvtToObj
                   : this[p] = Count;
             }
         }
-#endregion // VertexLookupXyz
+        #endregion // VertexLookupXyz
 
-#region VertexLookupInt
+        #region VertexLookupInt
         class PointDouble : IComparable<PointDouble>
         {
             public double X { get; set; }
@@ -190,7 +194,7 @@ namespace RvtToObj
 
         class VertexLookupDouble : Dictionary<PointDouble, int>
         {
-#region PointIntEqualityComparer
+            #region PointIntEqualityComparer
 
             class PointDoubleEqualityComparer : IEqualityComparer<PointDouble>
             {
@@ -212,7 +216,7 @@ namespace RvtToObj
                       .GetHashCode();
                 }
             }
-#endregion // PointIntEqualityComparer
+            #endregion // PointIntEqualityComparer
 
             public VertexLookupDouble()
               : base(new PointDoubleEqualityComparer())
@@ -229,7 +233,7 @@ namespace RvtToObj
 
         class VertexLookupInt : Dictionary<PointInt, int>
         {
-#region PointIntEqualityComparer
+            #region PointIntEqualityComparer
 
             class PointIntEqualityComparer : IEqualityComparer<PointInt>
             {
@@ -239,14 +243,14 @@ namespace RvtToObj
                 }
 
                 public int GetHashCode(PointInt p)
-                {  
+                {
                     return (p.X.ToString()
                       + "," + p.Y.ToString()
                       + "," + p.Z.ToString())
                       .GetHashCode();
                 }
             }
-#endregion // PointIntEqualityComparer
+            #endregion // PointIntEqualityComparer
 
             public VertexLookupInt()
               : base(new PointIntEqualityComparer())
@@ -273,12 +277,16 @@ namespace RvtToObj
         double currentTransparencyDouble;
         int currentShiniess;
 
+        List<string> map = new List<string>();
+        static string DouMat;
+
         ElementId currentMterialId = ElementId.InvalidElementId;
         int materialIndex = 0;
         Dictionary<string, Color> colors = new Dictionary<string, Color>();
         Dictionary<string, double> transparencys = new Dictionary<string, double>();
         Dictionary<string, int> Shiniess = new Dictionary<string, int>();
-
+        Dictionary<string, string> texture = new Dictionary<string, string>();
+        Dictionary<string, string> unifiedBitmap = new Dictionary<string, string>();
 
         //几何信息
         List<int> face = new List<int>();
@@ -286,7 +294,7 @@ namespace RvtToObj
         VertexLookupDouble _uvs = new VertexLookupDouble();
         VertexLookupDouble _normals = new VertexLookupDouble();
 
-        bool _switch_coordinates =true;
+        bool _switch_coordinates = true;
         Document _doc;
         string _filename;
         AssetSet _objlibraryAsset;
@@ -300,7 +308,7 @@ namespace RvtToObj
             }
         }
 
-        public RvtExportContext(Document doc, string filename,AssetSet objlibraryAsset)
+        public RvtExportContext(Document doc, string filename, AssetSet objlibraryAsset)
         {
             this._doc = doc;
             this._filename = filename;
@@ -314,7 +322,7 @@ namespace RvtToObj
 
         public void ReadAsset(Asset asset)
         {
-            var tempPath = Path.Combine(Path.GetTempPath(), "c.txt");
+            var tempPath = @"E:\c.txt";
             FileStream fs = new FileStream(tempPath, FileMode.OpenOrCreate);
             StreamWriter sw = new StreamWriter(fs);
             // travel the asset properties in the asset.
@@ -322,7 +330,7 @@ namespace RvtToObj
             {
                 AssetProperty prop = asset[idx];
                 ReadAssetProperty(prop, sw);
-            }           
+            }
             sw.Flush();
             fs.Close();
         }
@@ -380,6 +388,17 @@ namespace RvtToObj
 #endif
                     AssetPropertyString val = prop as AssetPropertyString;
                     objWriter.WriteLine(val.Name + "= " + val.Value + ";" + val.IsReadOnly.ToString());
+                    if (val.Name == "unifiedbitmap_Bitmap" && val.Value != "")
+                    {
+                        foreach (var v in val.Value.Trim().Replace("\\", "").Split('|'))
+                        {
+                            map.Add(v);
+                            
+                        }
+                        DouMat = val.Value.Trim().Replace("\\", "").Split('/')[2];
+                        //TaskDialog.Show("a",val.Value.Replace(" ", "").Replace("\\", "").Split('|')[0]);
+                    }
+
                     break;
 #if R2016
                 case AssetPropertyType.APT_Boolean:
@@ -430,11 +449,21 @@ namespace RvtToObj
 #elif R2018
                         case AssetPropertyType.String:
 #endif
+
                             foreach (AssetProperty subProp in subProps)
                             {
                                 AssetPropertyString intProp = subProp as AssetPropertyString;
                                 string intValue = intProp.Value;
                                 objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
+                                if (intProp.Name == "unifiedbitmap_Bitmap" && intProp.Value != "")
+                                {
+                                    foreach (var v in intProp.Value.Trim().Replace("\\", "").Split('|'))
+                                    {
+                                        map.Add(v);
+                                    }
+                                    DouMat = intProp.Value.Trim().Replace("\\", "").Split('/')[2];
+                                    //TaskDialog.Show("a",intProp.Value.Replace(" ","").Replace("\\","").Split('|')[0]);
+                                }
                             }
                             break;
                     }
@@ -460,6 +489,7 @@ namespace RvtToObj
                     objWriter.WriteLine("居然有啥都不是类型的" + prop.Type.ToString());
                     break;
             }
+
             // Get the connected properties.  
             // please notice that the information of many texture stores here.  
             if (prop.NumberOfConnectedProperties == 0)
@@ -468,6 +498,17 @@ namespace RvtToObj
             {
                 ReadAssetProperty(connectedProp, objWriter);
             }
+        }
+
+        private static string TextureFolder = null;
+        public static string GetTextureFolder()
+        {
+            if (TextureFolder == null)
+            {
+                var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                TextureFolder = Path.Combine(pf, @"Common Files\Autodesk Shared\Materials\Textures");
+            }
+            return TextureFolder;
         }
 
         public bool IsCanceled()
@@ -501,14 +542,18 @@ namespace RvtToObj
 
         public void OnMaterial(MaterialNode node)
         {
+            string ttrgb = null;
             currentTransparencyDouble = node.Transparency;
             currentColor = node.Color;
             currentShiniess = node.Glossiness;
             currentTransparencyint = Convert.ToInt32(node.Transparency);
 
+            ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
+
             #region ///读取位图
+            DouMat = null;
             if (node.MaterialId != ElementId.InvalidElementId)
-            {
+            {                
                 Asset theAsset = node.GetAppearance();
                 if (node.HasOverriddenAppearance)
                 {
@@ -530,9 +575,7 @@ namespace RvtToObj
                     {
                         if (objCurrentAsset.Name == theAsset.Name && objCurrentAsset.LibraryName == theAsset.LibraryName)
                         {
-                            //var theValue = objCurrentAsset.Type.ToString();
                             ReadAsset(objCurrentAsset);
-                            //TaskDialog.Show("欧特克材质", theValue);
                         }
                     }
                 }
@@ -540,6 +583,10 @@ namespace RvtToObj
                 {
                     ReadAsset(theAsset);
                 }
+                //if (!unifiedBitmap.ContainsKey(ttrgb))
+                //{
+                //    unifiedBitmap.Add(ttrgb, DouMat.Split('|')[0]);
+                //}
                 #endregion
             }
 
@@ -557,8 +604,6 @@ namespace RvtToObj
                 face.Add(-2);
                 currentMterialId = node.MaterialId;
 
-                var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
-
                 if (!transparencys.ContainsKey(ttrgb))
                 {
                     transparencys.Add(ttrgb, 1.0 - currentTransparencyDouble);
@@ -572,8 +617,7 @@ namespace RvtToObj
                 if (!Shiniess.ContainsKey(ttrgb))
                 {
                     Shiniess.Add(ttrgb, currentShiniess);
-                }
-
+                }              
             }
             else
             {
@@ -590,13 +634,11 @@ namespace RvtToObj
                     face.Add(-2);
                     face.Add(-2);
                     currentMterialId = node.MaterialId;
-                    var ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
                     colors.Add(ttrgb, currentColor);
                     transparencys.Add(ttrgb, currentTransparencyint);
                     Shiniess.Add(ttrgb, currentShiniess);
                 }
             }
-
             materialIndex++;
         }
 
@@ -605,7 +647,7 @@ namespace RvtToObj
             Debug.WriteLine(" OnFaceBegin: " + node.NodeName);
             return RenderNodeAction.Proceed;
         }
-        
+
         public void OnPolymesh(PolymeshTopology polymesh)
         {
             IList<XYZ> pts = polymesh.GetPoints();
@@ -618,7 +660,7 @@ namespace RvtToObj
             int v1, v2, v3;
             int v4, v5, v6;
             int v7, v8, v9;
-            int faceindex=0;
+            int faceindex = 0;
 
             foreach (PolymeshFacet facet in polymesh.GetFacets())
             {
@@ -652,17 +694,17 @@ namespace RvtToObj
                 }
                 else
                 {
-                    v7 = _normals.AddVertex(new PointDouble(normals[0],_switch_coordinates));
+                    v7 = _normals.AddVertex(new PointDouble(normals[0], _switch_coordinates));
                     v8 = v7;
                     v9 = v7;
-                }          
+                }
                 face.Add(v7);
                 face.Add(v8);
                 face.Add(v9);
 
                 faceindex++;
             }
-            
+
         }
 
         public void OnFaceEnd(FaceNode node)
@@ -689,8 +731,13 @@ namespace RvtToObj
 
         public void Finish()
         {
-            string material_library_path = null;
-            material_library_path = Path.ChangeExtension(_filename,"mtl");
+            WriteObj();
+            WriteMtl();
+            ReadBit();    
+        }
+
+        public void WriteObj()
+        {
             using (StreamWriter s = new StreamWriter(_filename))
             {
                 s.WriteLine(_mtl_mtllib, "model.mtl");
@@ -733,12 +780,17 @@ namespace RvtToObj
                     {
                         s.WriteLine($"f {i1 + 1}/{i4 + 1}/{i7 + 1} {i2 + 1}/{i5 + 1}/{i8 + 1} {i3 + 1}/{i6 + 1}/{i9 + 1}");
                     }
-
                 }
             }
+        }
 
+        public void WriteMtl()
+        {
             using (StreamWriter s = new StreamWriter(Path.GetDirectoryName(_filename) + "\\model.mtl"))
             {
+                DateTime currentTime = new DateTime();
+                currentTime = System.DateTime.Now;
+                s.WriteLine(_abstract, currentTime.ToString("d") + " " + currentTime.ToString("t"));
                 foreach (KeyValuePair<string, Color> color in colors)
                 {
                     s.WriteLine(_mtl_newmtl_d,
@@ -747,12 +799,34 @@ namespace RvtToObj
                                 color.Value.Green / 256.0,
                                 color.Value.Blue / 256.0,
                                 Shiniess[color.Key],
-                                transparencys[color.Key]);
+                                transparencys[color.Key]
+                                );
+                    //if (unifiedBitmap.ContainsKey(color.Key))
+                    //    s.WriteLine($"map_Kd {unifiedBitmap[color.Key]}");
                 }
             }
-            //TaskDialog.Show("RvtToObj", "导出成功！");
         }
 
+        public void ReadBit()
+        {
+            #region\\\读取位图
+            var textureFold = Path.GetDirectoryName(_filename);
+            List<string> bitmap = new List<string>();
+            foreach (var m in map)
+            {
+                if (!bitmap.Contains(m))
+                    bitmap.Add(m);
+            }
+            var folder = GetTextureFolder();
+
+            foreach (var bm in bitmap)
+            {
+                string textureFolder = Path.Combine(textureFold, bm.Split('/')[2]).Replace("/", "\\");
+                string sourceFolder = Path.Combine(folder, bm).Replace("/", "\\");
+                File.Copy(sourceFolder, textureFolder, true);
+            }
+            #endregion
+        }
 #if R2016
 
         public void OnDaylightPortal(DaylightPortalNode node)

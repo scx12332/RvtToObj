@@ -55,6 +55,10 @@ namespace RvtToObj
                 {
                     foldPath = dialog.SelectedPath;
                 }
+                else
+                {
+                    return Result.Cancelled;
+                }
                 string filename = doc.PathName;
                 if (0 == filename.Length)
                 {
