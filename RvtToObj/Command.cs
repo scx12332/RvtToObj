@@ -9,14 +9,19 @@ using Autodesk.Revit.DB.Visual;
 #endif
 using System;
 using System.Windows.Forms;
-
+using RvtToObj;
+using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace RvtToObj
 {
     [Transaction(TransactionMode.Manual)]
+    [Regeneration(RegenerationOption.Manual)]
     public class Command : IExternalCommand, IExternalCommandAvailability
     {
-        string foldPath = string.Empty;
+        List<string> files = new List<string>();
+        public static string foldPath = string.Empty;
 
         /// <summary>
         /// 导出三维视图，调用CustomExporter.Export
@@ -32,58 +37,132 @@ namespace RvtToObj
             exporter.Export(view3d);
         }
 
-        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        /// <summary>
+        /// 选择文件保存的路径
+        /// </summary>
+        public void SelcetFile()
         {
-            UIApplication uiapp = commandData.Application;
-            UIDocument uidoc = commandData.Application.ActiveUIDocument;
-            Autodesk.Revit.ApplicationServices.Application app = uiapp.Application;
-            Document doc = uidoc.Document;
-
-            AssetSet objlibraryAsset = app.get_Assets(AssetType.Appearance);
-
-            ///判断是否为空视图
-            View3D view = doc.ActiveView as View3D;
-            if (null == view)
+            string defaultPath = "";
+            FolderBrowserDialog dialog = new FolderBrowserDialog();
+            dialog.Description = "请选择文件保存路径";
+            if (defaultPath != "")
             {
-                Util.ErrorMsg("You must be in a 3D view to export.");
+                //设置此次默认目录为上一次选中目录  
+                dialog.SelectedPath = defaultPath;
             }
-            try
+            if (dialog.ShowDialog() == DialogResult.OK)
             {
-                FolderBrowserDialog dialog = new FolderBrowserDialog();
-                dialog.Description = "请选择文件保存路径";
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    foldPath = dialog.SelectedPath;
-                }
-                else
-                {
-                    return Result.Cancelled;
-                }
-                string filename = doc.PathName;
-                if (0 == filename.Length)
-                {
-                    filename = doc.Title;
-                }
-                filename = Path.GetFileNameWithoutExtension(filename) + ".obj";
-                string subPath = foldPath + "\\" + Path.GetFileNameWithoutExtension(filename);
-                if (!Directory.Exists(subPath))
-                {
-                    Directory.CreateDirectory(subPath);
-                }
-                filename = Path.Combine(subPath + "\\" + filename);
-
-                ExportView3D(doc.ActiveView as View3D, filename, objlibraryAsset);
+                foldPath = dialog.SelectedPath;
             }
-            catch (Exception e)
+            else
             {
-                Console.WriteLine(e.Message);
+                foldPath = defaultPath;
             }
-            return Result.Succeeded;
         }
 
+        /// <summary>
+        /// 选择所要操作的文件
+        /// </summary>
+        private void FilesOption()
+        {
+            OpenFileDialog fileDialog = new OpenFileDialog();
+            fileDialog.Multiselect = true;
+
+            fileDialog.Title = "请选择文件";
+            fileDialog.Filter = "所有文件(*rvt*)|*.rvt;*.rfa"; //设置要选择的文件的类型
+
+            if (fileDialog.ShowDialog() == DialogResult.OK)
+            {
+                MessageBox.Show( "即将导出，接下来选择导出路径！", "通知", MessageBoxButtons.OK);
+                SelcetFile();           
+                for (int i = 0; i < fileDialog.SafeFileNames.Length; i++)
+                {
+                    string file = fileDialog.FileNames.GetValue(i).ToString();//返回文件的完整路径 
+                    files.Add(file);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 创建文件保存的具体形式。
+        /// </summary>
+        /// <param name="doc"></param>
+        /// <returns></returns>
+        private string CreatFilePath(Document doc)
+        {
+            string filename = doc.PathName;
+            if (0 == filename.Length)
+            {
+                filename = doc.Title;
+            }
+            filename = Path.GetFileNameWithoutExtension(filename) + ".obj";
+            string subPath = foldPath + "\\" + Path.GetFileNameWithoutExtension(filename);
+            if (!Directory.Exists(subPath))
+            {
+                Directory.CreateDirectory(subPath);
+            }
+            filename = Path.Combine(subPath + "\\" + filename);
+            return filename;
+        }
+
+        /// <summary>
+        /// 可在打开revit时使用按钮，不然必须在打开文件后才可以。
+        /// </summary>
+        /// <param name="applicationData"></param>
+        /// <param name="selectedCategories"></param>
+        /// <returns></returns>
         public bool IsCommandAvailable(UIApplication applicationData, CategorySet selectedCategories)
         {
             return true;
+        }
+
+        public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+        {
+            FilesOption();
+            foreach (var file in files)
+            {
+                UIApplication uiapp = commandData.Application;
+                UIDocument uidoc = uiapp.OpenAndActivateDocument(file);
+                Autodesk.Revit.ApplicationServices.Application app = uiapp.Application;
+                Document doc = uidoc.Document;
+                AssetSet objlibraryAsset = app.get_Assets(AssetType.Appearance);
+
+                #region///判断是否为空视图,若为空视图，切换为3d视图
+                View3D view = doc.ActiveView as View3D;
+                if (null == view)
+                {
+                    IEnumerable<ViewFamilyType> viewFamilyTypes = from elem in new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType))
+                                                                  let type = elem as ViewFamilyType
+                                                                  where type.ViewFamily == ViewFamily.ThreeDimensional
+                                                                  select type;
+                    Transaction ts = new Transaction(doc, "Change3D");
+                    try
+                    {
+                        ts.Start();
+                        XYZ direction = new XYZ(-1, 1, -1);
+                        View3D view3D = View3D.CreateIsometric(doc, viewFamilyTypes.First().Id);
+                        //View3D view3D = uiDoc.Document.Create.NewView3D(new XYZ(-1, 1, -1));//斜视45度
+                        ts.Commit();
+                        //切换视图必须在事务结束后，否则会提示错误：
+                        //Cannot change the active view of a modifiable document
+                        uidoc.ActiveView = view3D;
+                    }
+                    catch (Exception ex)
+                    {
+                        TaskDialog.Show("ex", ex.ToString());
+                        ts.RollBack();
+                    }
+                    //Util.ErrorMsg("You must be in a 3D view to export.");
+                }
+                #endregion
+
+                ExportView3D(doc.ActiveView as View3D, CreatFilePath(doc), objlibraryAsset);
+
+                
+            }
+
+            MessageBox.Show("导出成功！","通知");
+            return Result.Succeeded;
         }
     }
 }

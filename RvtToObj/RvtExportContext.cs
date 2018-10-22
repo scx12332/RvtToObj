@@ -1,6 +1,5 @@
 ﻿using System;
 using Autodesk.Revit.DB;
-using Autodesk.Revit.UI;
 using System.Diagnostics;
 using System.IO;
 #if R2016
@@ -10,7 +9,6 @@ using Autodesk.Revit.DB.Visual;
 #endif
 using System.Linq;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 
 namespace RvtToObj
 {
@@ -25,12 +23,14 @@ namespace RvtToObj
             + "ka {1} {2} {3}\r\n"
             + "Kd {1} {2} {3}\r\n"
             + "Ns {4}\r\n"
-            + "d {5}";
-    
-        const string _mtl_mtllib = "mtllib {0}";
-        const string _mtl_vertex = "v {0} {1} {2}";
-        const string _mtl_normal = "vn {0} {1} {2}";
-        const string _mtl_uv = "vt {0} {1}";
+            + "d {5}\r\n";
+        const string _obj_mtllib = "mtllib {0}";
+        const string _obj_vertex = "v {0} {1} {2}";
+        const string _obj_normal = "vn {0} {1} {2}";
+        const string _obj_uv = "vt {0} {1}";
+        const string _obj_usemtl = "usemtl {0}";
+        const string _obj_face = "f {0}/{3}/{6} {1}/{4}/{7} {2}/{5}/{8}";
+        const string _mtl_bitmap = "map_Kd {0}";
         #endregion
 
         #region VertexLookupXyz
@@ -276,17 +276,16 @@ namespace RvtToObj
         int currentTransparencyint;
         double currentTransparencyDouble;
         int currentShiniess;
+        string ttrgb=string.Empty;
 
         List<string> map = new List<string>();
-        static string DouMat;
 
         ElementId currentMterialId = ElementId.InvalidElementId;
         int materialIndex = 0;
         Dictionary<string, Color> colors = new Dictionary<string, Color>();
         Dictionary<string, double> transparencys = new Dictionary<string, double>();
-        Dictionary<string, int> Shiniess = new Dictionary<string, int>();
+        Dictionary<string, int> shiniess = new Dictionary<string, int>();
         Dictionary<string, string> texture = new Dictionary<string, string>();
-        Dictionary<string, string> unifiedBitmap = new Dictionary<string, string>();
 
         //几何信息
         List<int> face = new List<int>();
@@ -294,6 +293,7 @@ namespace RvtToObj
         VertexLookupDouble _uvs = new VertexLookupDouble();
         VertexLookupDouble _normals = new VertexLookupDouble();
 
+        private static string TextureFolder = null;
         bool _switch_coordinates = true;
         Document _doc;
         string _filename;
@@ -315,27 +315,27 @@ namespace RvtToObj
             this._objlibraryAsset = objlibraryAsset;
         }
 
-        private static string NormalizeMatName(string matName)
+        /// <summary>
+        /// 读取Asset
+        /// </summary>
+        /// <param name="asset"></param>
+        /// <param name="ttrgb"></param>
+        public void ReadAsset(Asset asset,string ttrgb)
         {
-            return matName.Replace(" ", "").Replace("\t", "");
-        }
-
-        public void ReadAsset(Asset asset)
-        {
-            var tempPath = @"E:\c.txt";
-            FileStream fs = new FileStream(tempPath, FileMode.OpenOrCreate);
-            StreamWriter sw = new StreamWriter(fs);
-            // travel the asset properties in the asset.
+            // 遍历Asset中的各个属性.
             for (int idx = 0; idx < asset.Size; idx++)
             {
                 AssetProperty prop = asset[idx];
-                ReadAssetProperty(prop, sw);
+                ReadAssetProperty(prop, ttrgb);
             }
-            sw.Flush();
-            fs.Close();
         }
 
-        public void ReadAssetProperty(AssetProperty prop, StreamWriter objWriter)
+        /// <summary>
+        /// 读取Asset中的各种属性
+        /// </summary>
+        /// <param name="prop"></param>
+        /// <param name="ttrgb"></param>
+        public void ReadAssetProperty(AssetProperty prop, string ttrgb)
         {
             switch (prop.Type)
             {
@@ -347,7 +347,7 @@ namespace RvtToObj
                 case AssetPropertyType.Integer:
 #endif
                     var AssetPropertyInt = prop as AssetPropertyInteger;
-                    objWriter.WriteLine(AssetPropertyInt.Name + "= " + AssetPropertyInt.Value.ToString() + ";" + AssetPropertyInt.IsReadOnly.ToString());
+                    //objWriter.WriteLine(AssetPropertyInt.Name + "= " + AssetPropertyInt.Value.ToString() + ";" + AssetPropertyInt.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_Distance:
@@ -355,7 +355,7 @@ namespace RvtToObj
                 case AssetPropertyType.Distance:
 #endif
                     var AssetPropertyDistance = prop as AssetPropertyDistance;
-                    objWriter.WriteLine(AssetPropertyDistance.Name + "= " + AssetPropertyDistance.Value + ";" + AssetPropertyDistance.IsReadOnly.ToString());
+                    //objWriter.WriteLine(AssetPropertyDistance.Name + "= " + AssetPropertyDistance.Value + ";" + AssetPropertyDistance.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_Double:
@@ -363,7 +363,7 @@ namespace RvtToObj
                 case AssetPropertyType.Double1:
 #endif
                     var AssetPropertyDouble = prop as AssetPropertyDouble;
-                    objWriter.WriteLine(AssetPropertyDouble.Name + "= " + AssetPropertyDouble.Value.ToString() + ";" + AssetPropertyDouble.IsReadOnly.ToString());
+                    //objWriter.WriteLine(AssetPropertyDouble.Name + "= " + AssetPropertyDouble.Value.ToString() + ";" + AssetPropertyDouble.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_DoubleArray2d:
@@ -371,7 +371,7 @@ namespace RvtToObj
                 case AssetPropertyType.Double2:
 #endif
                     var AssetPropertyDoubleArray2d = prop as AssetPropertyDoubleArray2d;
-                    objWriter.WriteLine(AssetPropertyDoubleArray2d.Name + "= " + AssetPropertyDoubleArray2d.Value.ToString() + ";" + AssetPropertyDoubleArray2d.IsReadOnly.ToString());
+                    //objWriter.WriteLine(AssetPropertyDoubleArray2d.Name + "= " + AssetPropertyDoubleArray2d.Value.ToString() + ";" + AssetPropertyDoubleArray2d.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_DoubleArray4d:
@@ -379,7 +379,7 @@ namespace RvtToObj
                 case AssetPropertyType.Double4:
 #endif
                     var AssetPropertyDoubleArray4d = prop as AssetPropertyDoubleArray4d;
-                    objWriter.WriteLine(AssetPropertyDoubleArray4d.Name + "= " + AssetPropertyDoubleArray4d.Value.ToString() + ";" + AssetPropertyDoubleArray4d.IsReadOnly.ToString());
+                    //objWriter.WriteLine(AssetPropertyDoubleArray4d.Name + "= " + AssetPropertyDoubleArray4d.Value.ToString() + ";" + AssetPropertyDoubleArray4d.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_String:
@@ -387,16 +387,11 @@ namespace RvtToObj
                 case AssetPropertyType.String:
 #endif
                     AssetPropertyString val = prop as AssetPropertyString;
-                    objWriter.WriteLine(val.Name + "= " + val.Value + ";" + val.IsReadOnly.ToString());
+                    //objWriter.WriteLine(val.Name + "= " + val.Value + ";" + val.IsReadOnly.ToString());
                     if (val.Name == "unifiedbitmap_Bitmap" && val.Value != "")
                     {
-                        foreach (var v in val.Value.Trim().Replace("\\", "").Split('|'))
-                        {
-                            map.Add(v);
-                            
-                        }
-                        DouMat = val.Value.Trim().Replace("\\", "").Split('/')[2];
-                        //TaskDialog.Show("a",val.Value.Replace(" ", "").Replace("\\", "").Split('|')[0]);
+                        map.Add(ttrgb);
+                        map.Add(val.Value.Trim().Replace("\\", ""));
                     }
 
                     break;
@@ -406,7 +401,7 @@ namespace RvtToObj
                 case AssetPropertyType.Boolean:
 #endif
                     AssetPropertyBoolean boolProp = prop as AssetPropertyBoolean;
-                    objWriter.WriteLine(boolProp.Name + "= " + boolProp.Value.ToString() + ";" + boolProp.IsReadOnly.ToString());
+                    //objWriter.WriteLine(boolProp.Name + "= " + boolProp.Value.ToString() + ";" + boolProp.IsReadOnly.ToString());
                     break;
                 // When you retrieve the value from the data array property,  
                 // you may need to get which value the property stands for.  
@@ -418,7 +413,7 @@ namespace RvtToObj
 #endif
                     AssetPropertyDoubleArray4d transformProp = prop as AssetPropertyDoubleArray4d;
                     DoubleArray tranformValue = transformProp.Value;
-                    objWriter.WriteLine(transformProp.Name + "= " + transformProp.Value.ToString() + ";" + tranformValue.IsReadOnly.ToString());
+                    //objWriter.WriteLine(transformProp.Name + "= " + transformProp.Value.ToString() + ";" + tranformValue.IsReadOnly.ToString());
                     break;
                 // The APT_List contains a list of sub asset properties with same type. 
 #if R2016
@@ -441,7 +436,7 @@ namespace RvtToObj
                             {
                                 AssetPropertyInteger intProp = subProp as AssetPropertyInteger;
                                 int intValue = intProp.Value;
-                                objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
+                                //objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
                             }
                             break;
 #if R2016
@@ -454,15 +449,11 @@ namespace RvtToObj
                             {
                                 AssetPropertyString intProp = subProp as AssetPropertyString;
                                 string intValue = intProp.Value;
-                                objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
+                                //objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
                                 if (intProp.Name == "unifiedbitmap_Bitmap" && intProp.Value != "")
                                 {
-                                    foreach (var v in intProp.Value.Trim().Replace("\\", "").Split('|'))
-                                    {
-                                        map.Add(v);
-                                    }
-                                    DouMat = intProp.Value.Trim().Replace("\\", "").Split('/')[2];
-                                    //TaskDialog.Show("a",intProp.Value.Replace(" ","").Replace("\\","").Split('|')[0]);
+                                    map.Add(ttrgb);
+                                    map.Add(intProp.Value.Trim().Replace("\\", ""));
                                 }
                             }
                             break;
@@ -476,7 +467,7 @@ namespace RvtToObj
                     Asset propAsset = prop as Asset;
                     for (int i = 0; i < propAsset.Size; i++)
                     {
-                        ReadAssetProperty(propAsset[i], objWriter);
+                        ReadAssetProperty(propAsset[i], ttrgb);
                     }
                     break;
 #if R2016
@@ -486,7 +477,7 @@ namespace RvtToObj
 #endif
                     break;
                 default:
-                    objWriter.WriteLine("居然有啥都不是类型的" + prop.Type.ToString());
+                    //objWriter.WriteLine("居然有啥都不是类型的" + prop.Type.ToString());
                     break;
             }
 
@@ -496,19 +487,8 @@ namespace RvtToObj
                 return;
             foreach (AssetProperty connectedProp in prop.GetAllConnectedProperties())
             {
-                ReadAssetProperty(connectedProp, objWriter);
+                ReadAssetProperty(connectedProp, ttrgb);
             }
-        }
-
-        private static string TextureFolder = null;
-        public static string GetTextureFolder()
-        {
-            if (TextureFolder == null)
-            {
-                var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-                TextureFolder = Path.Combine(pf, @"Common Files\Autodesk Shared\Materials\Textures");
-            }
-            return TextureFolder;
         }
 
         public bool IsCanceled()
@@ -542,18 +522,26 @@ namespace RvtToObj
 
         public void OnMaterial(MaterialNode node)
         {
-            string ttrgb = null;
             currentTransparencyDouble = node.Transparency;
             currentColor = node.Color;
             currentShiniess = node.Glossiness;
             currentTransparencyint = Convert.ToInt32(node.Transparency);
-
             ttrgb = Util.ColorTransparencyString(currentColor, currentTransparencyint);
 
-            #region ///读取位图
-            DouMat = null;
+            ReadBitMap(node);
+            GetMaterial(node);
+
+            materialIndex++;
+        }
+
+        /// <summary>
+        /// 得到材质的Asset集合
+        /// </summary>
+        /// <param name="node"></param>
+        private void ReadBitMap(MaterialNode node)
+        {
             if (node.MaterialId != ElementId.InvalidElementId)
-            {                
+            {
                 Asset theAsset = node.GetAppearance();
                 if (node.HasOverriddenAppearance)
                 {
@@ -561,35 +549,35 @@ namespace RvtToObj
                 }
                 if (theAsset == null)
                 {
-                    //Element m = _doc.GetElement(node.MaterialId);
                     Material material = _doc.GetElement(node.MaterialId) as Material;
                     ElementId appearanceId = material.AppearanceAssetId;
                     AppearanceAssetElement appearanceElem = _doc.GetElement(appearanceId) as AppearanceAssetElement;
                     theAsset = appearanceElem.GetRenderingAsset();
                 }
-
                 if (theAsset.Size == 0)
                 {
-                    //TaskDialog.Show("revit","欧特克材质");
+                    //Asset大小为0，则为欧特克材质
                     foreach (Asset objCurrentAsset in _objlibraryAsset)
                     {
                         if (objCurrentAsset.Name == theAsset.Name && objCurrentAsset.LibraryName == theAsset.LibraryName)
                         {
-                            ReadAsset(objCurrentAsset);
+                            ReadAsset(objCurrentAsset, ttrgb);
                         }
                     }
                 }
                 else
                 {
-                    ReadAsset(theAsset);
+                    ReadAsset(theAsset, ttrgb);
                 }
-                //if (!unifiedBitmap.ContainsKey(ttrgb))
-                //{
-                //    unifiedBitmap.Add(ttrgb, DouMat.Split('|')[0]);
-                //}
-                #endregion
             }
+        }
 
+        /// <summary>
+        /// 将每种材质的颜色透明度等属性添加到字典中
+        /// </summary>
+        /// <param name="node"></param>
+        private void GetMaterial(MaterialNode node)
+        {
             if (currentMterialId != node.MaterialId)
             {
                 var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
@@ -614,12 +602,12 @@ namespace RvtToObj
                     colors.Add(ttrgb, currentColor);
                 }
 
-                if (!Shiniess.ContainsKey(ttrgb))
+                if (!shiniess.ContainsKey(ttrgb))
                 {
-                    Shiniess.Add(ttrgb, currentShiniess);
-                }              
+                    shiniess.Add(ttrgb, currentShiniess);
+                }
             }
-            else
+            else  //由于初始currentMterialId为-1，所以当第一个id为-1时，会跳过，所以这里单独添加一下。
             {
                 if (materialIndex == 0)
                 {
@@ -636,10 +624,9 @@ namespace RvtToObj
                     currentMterialId = node.MaterialId;
                     colors.Add(ttrgb, currentColor);
                     transparencys.Add(ttrgb, currentTransparencyint);
-                    Shiniess.Add(ttrgb, currentShiniess);
+                    shiniess.Add(ttrgb, currentShiniess);
                 }
             }
-            materialIndex++;
         }
 
         public RenderNodeAction OnFaceBegin(FaceNode node)
@@ -656,7 +643,19 @@ namespace RvtToObj
 
             var normals = polymesh.GetNormals();
             var uvs = polymesh.GetUVs();
+            GetFaceIndex(polymesh, pts, normals, uvs);
+        }
 
+        /// <summary>
+        /// 获取几何信息中每个三角面对应点的顶点坐标/法向坐标/UV坐标的索引
+        /// 并存入face列表中
+        /// </summary>
+        /// <param name="polymesh"></param>
+        /// <param name="pts"></param>
+        /// <param name="normals"></param>
+        /// <param name="uvs"></param>
+        private void GetFaceIndex(PolymeshTopology polymesh, IList<XYZ> pts, IList<XYZ> normals, IList<UV> uvs)
+        {
             int v1, v2, v3;
             int v4, v5, v6;
             int v7, v8, v9;
@@ -704,7 +703,6 @@ namespace RvtToObj
 
                 faceindex++;
             }
-
         }
 
         public void OnFaceEnd(FaceNode node)
@@ -729,32 +727,58 @@ namespace RvtToObj
             Debug.WriteLine("OnViewEnd: Id: " + elementId.IntegerValue);
         }
 
+        /// <summary>
+        /// 将Asset中读取到的位图处理并规范为1/Mats/*****.png(jpg)。
+        /// 去重后存入bitmap列表中，其中包含了每个材质和每种材质下对应的所有位图信息。
+        /// </summary>
+        /// <param name="map"></param>
+        /// <returns></returns>
+        public List<string> ProcessBitMap(List<string> map)
+        {
+            List<string> bitmap = new List<string>();
+            foreach (var m in map)
+            {
+                string m1 = m.Split('|')[0];
+                if (m1.Substring(1, 4) == "Mats")
+                {
+
+                    m1 = m1[0] + @"/Mats/" + m1.Remove(0, 5);
+                }
+                if (!bitmap.Contains(m1))
+                    bitmap.Add(m1);
+            }
+            return bitmap;
+        }
+
         public void Finish()
         {
             WriteObj();
-            WriteMtl();
-            ReadBit();    
+            List<string> unifiedbitmap = WriteMtl(ProcessBitMap(map));
+            GetBitMap(unifiedbitmap);
         }
 
+        /// <summary>
+        /// 将几何信息写入obj文件
+        /// </summary>
         public void WriteObj()
         {
             using (StreamWriter s = new StreamWriter(_filename))
             {
-                s.WriteLine(_mtl_mtllib, "model.mtl");
+                s.WriteLine(_obj_mtllib, "model.mtl");
 
                 foreach (PointInt key in _vertices.Keys)
                 {
-                    s.WriteLine(_mtl_vertex, key.X / 1000, key.Y / 1000, key.Z / 1000);
+                    s.WriteLine(_obj_vertex, key.X / 1000, key.Y / 1000, key.Z / 1000);
                 }
 
                 foreach (PointDouble key in _normals.Keys)
                 {
-                    s.WriteLine(_mtl_normal, key.X, key.Y, key.Z);
+                    s.WriteLine(_obj_normal, key.X, key.Y, key.Z);
                 }
 
                 foreach (PointDouble key in _uvs.Keys)
                 {
-                    s.WriteLine(_mtl_uv, key.X, key.Y);
+                    s.WriteLine(_obj_uv, key.X, key.Y);
                 }
 
                 int i = 0;
@@ -774,58 +798,89 @@ namespace RvtToObj
                     int i9 = face[i++];
                     if (-1 == i1)
                     {
-                        s.WriteLine($"usemtl {Util.ColorTransparencyString(Util.IntToColorTransparency(i2, out i3), i3)}");
+                        s.WriteLine(_obj_usemtl, Util.ColorTransparencyString(Util.IntToColorTransparency(i2, out i3), i3));
                     }
                     else
                     {
-                        s.WriteLine($"f {i1 + 1}/{i4 + 1}/{i7 + 1} {i2 + 1}/{i5 + 1}/{i8 + 1} {i3 + 1}/{i6 + 1}/{i9 + 1}");
+                        s.WriteLine(_obj_face, i1 + 1, i2 + 1, i3 + 1, i4 + 1, i5 + 1, i6 + 1, i7 + 1, i8 + 1, i9 + 1);
                     }
                 }
             }
         }
 
-        public void WriteMtl()
+        /// <summary>
+        /// 将材质信息写入mtl文件。
+        /// </summary>
+        /// <param name="bitmap"></param>
+        /// <returns></returns>
+        public List<string> WriteMtl(List<string> bitmap)
         {
             using (StreamWriter s = new StreamWriter(Path.GetDirectoryName(_filename) + "\\model.mtl"))
             {
                 DateTime currentTime = new DateTime();
-                currentTime = System.DateTime.Now;
+                currentTime = DateTime.Now;
                 s.WriteLine(_abstract, currentTime.ToString("d") + " " + currentTime.ToString("t"));
                 foreach (KeyValuePair<string, Color> color in colors)
                 {
-                    s.WriteLine(_mtl_newmtl_d,
+                    s.Write(_mtl_newmtl_d,
                                 color.Key,
                                 color.Value.Red / 256.0,
                                 color.Value.Green / 256.0,
                                 color.Value.Blue / 256.0,
-                                Shiniess[color.Key],
+                                shiniess[color.Key],
                                 transparencys[color.Key]
                                 );
-                    //if (unifiedBitmap.ContainsKey(color.Key))
-                    //    s.WriteLine($"map_Kd {unifiedBitmap[color.Key]}");
+                    if (bitmap.Contains(color.Key))
+                    {
+                        for (int i = 1; i < (bitmap.Count - bitmap.IndexOf(color.Key)); i++)
+                        {
+                            var val = bitmap[bitmap.IndexOf(color.Key) + i];
+                            if (!colors.ContainsKey(val))
+                            {
+                                s.WriteLine(_mtl_bitmap, val.Remove(0, 7));
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        bitmap.Remove(color.Key);
+                    }
                 }
+            }
+            return bitmap;
+        }
+
+        /// <summary>
+        /// 读取并导出所有位图。
+        /// </summary>
+        /// <param name="bitmap"></param>
+        public void GetBitMap(List<string> bitmap)
+        {
+            string textureFold = Path.GetDirectoryName(_filename);
+            string texturefolder = GetTextureFolder();
+            foreach (var bm in bitmap)
+            {
+                string sourceFolder = string.Empty;
+                string textureFolder = string.Empty;
+                sourceFolder = Path.Combine(texturefolder, bm).Replace("/", "\\");
+                int len = (bm.Split('/')[2]).Split(' ').Length;
+                textureFolder = Path.Combine(textureFold, (bm.Split('/')[2]).Split(' ')[len - 1].Trim()).Replace("/", "\\");
+                File.Copy(sourceFolder, textureFolder, true);
             }
         }
 
-        public void ReadBit()
+        /// <summary>
+        /// 获取位图在系统中的公共路径。
+        /// </summary>
+        public static string GetTextureFolder()
         {
-            #region\\\读取位图
-            var textureFold = Path.GetDirectoryName(_filename);
-            List<string> bitmap = new List<string>();
-            foreach (var m in map)
+            if (TextureFolder == null)
             {
-                if (!bitmap.Contains(m))
-                    bitmap.Add(m);
+                var pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+                TextureFolder = Path.Combine(pf, @"Common Files\Autodesk Shared\Materials\Textures");
             }
-            var folder = GetTextureFolder();
-
-            foreach (var bm in bitmap)
-            {
-                string textureFolder = Path.Combine(textureFold, bm.Split('/')[2]).Replace("/", "\\");
-                string sourceFolder = Path.Combine(folder, bm).Replace("/", "\\");
-                File.Copy(sourceFolder, textureFolder, true);
-            }
-            #endregion
+            return TextureFolder;
         }
 #if R2016
 
@@ -840,7 +895,6 @@ namespace RvtToObj
         }
 
 #endif
-
         public void OnLight(LightNode node)
         {
             Debug.WriteLine("OnLight: " + node.NodeName);

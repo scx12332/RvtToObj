@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27703.2047
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RvtToObj", "RvtToObj\RvtToObj.csproj", "{7ECC566F-FC18-4473-BBBF-AC0E0684324F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RvtToObj2018", "RvtToObj\RvtToObj2018.csproj", "{2D127080-78A4-4C32-AD22-40DB2A1B6F47}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UiRibbon", "UiRibbon\UiRibbon.csproj", "{18BE0E60-04A9-4197-8759-2A8C1300A558}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{2D127080-78A4-4C32-AD22-40DB2A1B6F47}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2D127080-78A4-4C32-AD22-40DB2A1B6F47}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2D127080-78A4-4C32-AD22-40DB2A1B6F47}.Release|Any CPU.Build.0 = Release|Any CPU
+		{18BE0E60-04A9-4197-8759-2A8C1300A558}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{18BE0E60-04A9-4197-8759-2A8C1300A558}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{18BE0E60-04A9-4197-8759-2A8C1300A558}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{18BE0E60-04A9-4197-8759-2A8C1300A558}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
