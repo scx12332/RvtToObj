@@ -9,10 +9,9 @@ using Autodesk.Revit.DB.Visual;
 #endif
 using System;
 using System.Windows.Forms;
-using RvtToObj;
-using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 
 namespace RvtToObj
 {
@@ -41,29 +40,19 @@ namespace RvtToObj
         /// 选择文件保存的路径
         /// </summary>
         public void SelcetFile()
-        {
-            string defaultPath = "";
+        {          
             FolderBrowserDialog dialog = new FolderBrowserDialog();
-            dialog.Description = "请选择文件保存路径";
-            if (defaultPath != "")
-            {
-                //设置此次默认目录为上一次选中目录  
-                dialog.SelectedPath = defaultPath;
-            }
+            dialog.Description = "请选择文件保存路径";        
             if (dialog.ShowDialog() == DialogResult.OK)
             {
                 foldPath = dialog.SelectedPath;
-            }
-            else
-            {
-                foldPath = defaultPath;
             }
         }
 
         /// <summary>
         /// 选择所要操作的文件
         /// </summary>
-        private void FilesOption()
+        private bool FilesOption()
         {
             OpenFileDialog fileDialog = new OpenFileDialog();
             fileDialog.Multiselect = true;
@@ -80,7 +69,9 @@ namespace RvtToObj
                     string file = fileDialog.FileNames.GetValue(i).ToString();//返回文件的完整路径 
                     files.Add(file);
                 }
+                return true;
             }
+            return false;
         }
 
         /// <summary>
@@ -118,50 +109,58 @@ namespace RvtToObj
 
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            FilesOption();
-            foreach (var file in files)
+            if(FilesOption())
             {
-                UIApplication uiapp = commandData.Application;
-                UIDocument uidoc = uiapp.OpenAndActivateDocument(file);
-                Autodesk.Revit.ApplicationServices.Application app = uiapp.Application;
-                Document doc = uidoc.Document;
-                AssetSet objlibraryAsset = app.get_Assets(AssetType.Appearance);
-
-                #region///判断是否为空视图,若为空视图，切换为3d视图
-                View3D view = doc.ActiveView as View3D;
-                if (null == view)
+                foreach (var file in files)
                 {
-                    IEnumerable<ViewFamilyType> viewFamilyTypes = from elem in new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType))
-                                                                  let type = elem as ViewFamilyType
-                                                                  where type.ViewFamily == ViewFamily.ThreeDimensional
-                                                                  select type;
-                    Transaction ts = new Transaction(doc, "Change3D");
-                    try
+                    string codeBase = Assembly.GetExecutingAssembly().CodeBase;
+                    UriBuilder uri = new UriBuilder(codeBase);
+                    string path = Uri.UnescapeDataString(uri.Path);
+                    var placeholderFile = Path.GetDirectoryName(path) + @"\placeholderFile.rte";
+
+                    UIApplication uiapp = commandData.Application;
+                    UIDocument uidoc = uiapp.OpenAndActivateDocument(file);
+                    Autodesk.Revit.ApplicationServices.Application app = uiapp.Application;
+                    Document doc = uidoc.Document;
+                    AssetSet objlibraryAsset = app.get_Assets(AssetType.Appearance);
+
+                    #region///判断是否为空视图,若为空视图，切换为3d视图
+                    View3D view = doc.ActiveView as View3D;
+                    if (null == view)
                     {
-                        ts.Start();
-                        XYZ direction = new XYZ(-1, 1, -1);
-                        View3D view3D = View3D.CreateIsometric(doc, viewFamilyTypes.First().Id);
-                        //View3D view3D = uiDoc.Document.Create.NewView3D(new XYZ(-1, 1, -1));//斜视45度
-                        ts.Commit();
-                        //切换视图必须在事务结束后，否则会提示错误：
-                        //Cannot change the active view of a modifiable document
-                        uidoc.ActiveView = view3D;
+                        IEnumerable<ViewFamilyType> viewFamilyTypes = from elem in new FilteredElementCollector(doc).OfClass(typeof(ViewFamilyType))
+                                                                      let type = elem as ViewFamilyType
+                                                                      where type.ViewFamily == ViewFamily.ThreeDimensional
+                                                                      select type;
+                        Transaction ts = new Transaction(doc, "Change3D");
+                        try
+                        {
+                            ts.Start();
+                            XYZ direction = new XYZ(-1, 1, -1);
+                            View3D view3D = View3D.CreateIsometric(doc, viewFamilyTypes.First().Id);
+                            //View3D view3D = uiDoc.Document.Create.NewView3D(new XYZ(-1, 1, -1));//斜视45度
+                            ts.Commit();
+                            //切换视图必须在事务结束后，否则会提示错误：
+                            //Cannot change the active view of a modifiable document
+                            uidoc.ActiveView = view3D;
+                        }
+                        catch (Exception ex)
+                        {
+                            TaskDialog.Show("ex", ex.ToString());
+                            ts.RollBack();
+                        }
+                        //Util.ErrorMsg("You must be in a 3D view to export.");
                     }
-                    catch (Exception ex)
-                    {
-                        TaskDialog.Show("ex", ex.ToString());
-                        ts.RollBack();
-                    }
-                    //Util.ErrorMsg("You must be in a 3D view to export.");
+                    #endregion
+
+                    ExportView3D(doc.ActiveView as View3D, CreatFilePath(doc), objlibraryAsset);
+
+                    //通过占位文件关闭当前文件
+                    var docPlaceholder = commandData.Application.OpenAndActivateDocument(placeholderFile);
+                    doc.Close(false);
                 }
-                #endregion
-
-                ExportView3D(doc.ActiveView as View3D, CreatFilePath(doc), objlibraryAsset);
-
-                
-            }
-
-            MessageBox.Show("导出成功！","通知");
+                MessageBox.Show("导出成功！", "通知");
+            }            
             return Result.Succeeded;
         }
     }

@@ -9,6 +9,7 @@ using Autodesk.Revit.DB.Visual;
 #endif
 using System.Linq;
 using System.Collections.Generic;
+using Autodesk.Revit.UI;
 
 namespace RvtToObj
 {
@@ -35,15 +36,13 @@ namespace RvtToObj
 
         #region VertexLookupXyz
         /// <summary>
-        /// A vertex lookup class to eliminate 
-        /// duplicate vertex definitions.
+        /// 去除重复顶点的查找类
         /// </summary>
         class VertexLookupXyz : Dictionary<XYZ, int>
         {
             #region XyzEqualityComparer
             /// <summary>
-            /// Define equality for Revit XYZ points.
-            /// Very rough tolerance, as used by Revit itself.
+            /// 为XYZ类型的点定义比较类，引入一个松弛常量
             /// </summary>
             class XyzEqualityComparer : IEqualityComparer<XYZ>
             {
@@ -69,8 +68,7 @@ namespace RvtToObj
             }
 
             /// <summary>
-            /// Return the index of the given vertex,
-            /// adding a new entry if required.
+            /// 添加未包含点的索引并返回
             /// </summary>
             public int AddVertex(XYZ p)
             {
@@ -205,10 +203,6 @@ namespace RvtToObj
 
                 public int GetHashCode(PointDouble p)
                 {
-                    //return (p.X.ToString()
-                    //  + "," + p.Y.ToString()
-                    //  + "," + p.Z.ToString())
-                    //  .GetHashCode();
                     var format = "{0.#########}";
                     return (p.X.ToString(format)
                       + "," + p.Y.ToString(format)
@@ -257,10 +251,6 @@ namespace RvtToObj
             {
             }
 
-            /// <summary>
-            /// Return the index of the given vertex,
-            /// adding a new entry if required.
-            /// </summary>
             public int AddVertex(PointInt p)
             {
                 return ContainsKey(p)
@@ -278,10 +268,9 @@ namespace RvtToObj
         int currentShiniess;
         string ttrgb=string.Empty;
 
-        List<string> map = new List<string>();
-
-        ElementId currentMterialId = ElementId.InvalidElementId;
         int materialIndex = 0;
+        ElementId currentMterialId = ElementId.InvalidElementId;
+        List<string> map = new List<string>();
         Dictionary<string, Color> colors = new Dictionary<string, Color>();
         Dictionary<string, double> transparencys = new Dictionary<string, double>();
         Dictionary<string, int> shiniess = new Dictionary<string, int>();
@@ -338,16 +327,13 @@ namespace RvtToObj
         public void ReadAssetProperty(AssetProperty prop, string ttrgb)
         {
             switch (prop.Type)
-            {
-                // Retrieve the value from simple type property is easy.  
-                // for example, retrieve bool property value.  
+            { 
 #if R2016
                 case AssetPropertyType.APT_Integer:
 #elif R2018
                 case AssetPropertyType.Integer:
 #endif
-                    var AssetPropertyInt = prop as AssetPropertyInteger;
-                    //objWriter.WriteLine(AssetPropertyInt.Name + "= " + AssetPropertyInt.Value.ToString() + ";" + AssetPropertyInt.IsReadOnly.ToString());
+                    var AssetPropertyInt = prop as AssetPropertyInteger;                  
                     break;
 #if R2016
                 case AssetPropertyType.APT_Distance:
@@ -355,7 +341,6 @@ namespace RvtToObj
                 case AssetPropertyType.Distance:
 #endif
                     var AssetPropertyDistance = prop as AssetPropertyDistance;
-                    //objWriter.WriteLine(AssetPropertyDistance.Name + "= " + AssetPropertyDistance.Value + ";" + AssetPropertyDistance.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_Double:
@@ -363,7 +348,6 @@ namespace RvtToObj
                 case AssetPropertyType.Double1:
 #endif
                     var AssetPropertyDouble = prop as AssetPropertyDouble;
-                    //objWriter.WriteLine(AssetPropertyDouble.Name + "= " + AssetPropertyDouble.Value.ToString() + ";" + AssetPropertyDouble.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_DoubleArray2d:
@@ -371,7 +355,6 @@ namespace RvtToObj
                 case AssetPropertyType.Double2:
 #endif
                     var AssetPropertyDoubleArray2d = prop as AssetPropertyDoubleArray2d;
-                    //objWriter.WriteLine(AssetPropertyDoubleArray2d.Name + "= " + AssetPropertyDoubleArray2d.Value.ToString() + ";" + AssetPropertyDoubleArray2d.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_DoubleArray4d:
@@ -379,7 +362,6 @@ namespace RvtToObj
                 case AssetPropertyType.Double4:
 #endif
                     var AssetPropertyDoubleArray4d = prop as AssetPropertyDoubleArray4d;
-                    //objWriter.WriteLine(AssetPropertyDoubleArray4d.Name + "= " + AssetPropertyDoubleArray4d.Value.ToString() + ";" + AssetPropertyDoubleArray4d.IsReadOnly.ToString());
                     break;
 #if R2016
                 case AssetPropertyType.APT_String:
@@ -387,7 +369,6 @@ namespace RvtToObj
                 case AssetPropertyType.String:
 #endif
                     AssetPropertyString val = prop as AssetPropertyString;
-                    //objWriter.WriteLine(val.Name + "= " + val.Value + ";" + val.IsReadOnly.ToString());
                     if (val.Name == "unifiedbitmap_Bitmap" && val.Value != "")
                     {
                         map.Add(ttrgb);
@@ -395,27 +376,28 @@ namespace RvtToObj
                     }
 
                     break;
+
 #if R2016
                 case AssetPropertyType.APT_Boolean:
 #elif R2018
                 case AssetPropertyType.Boolean:
 #endif
                     AssetPropertyBoolean boolProp = prop as AssetPropertyBoolean;
-                    //objWriter.WriteLine(boolProp.Name + "= " + boolProp.Value.ToString() + ";" + boolProp.IsReadOnly.ToString());
                     break;
-                // When you retrieve the value from the data array property,  
-                // you may need to get which value the property stands for.  
-                // for example, the APT_Double44 may be a transform data. 
+
 #if R2016
                 case AssetPropertyType.APT_Double44:
 #elif R2018
                 case AssetPropertyType.Double44:
 #endif
                     AssetPropertyDoubleArray4d transformProp = prop as AssetPropertyDoubleArray4d;
+#if R2016
                     DoubleArray tranformValue = transformProp.Value;
-                    //objWriter.WriteLine(transformProp.Name + "= " + transformProp.Value.ToString() + ";" + tranformValue.IsReadOnly.ToString());
+#elif R2018
+                    DoubleArray tranformValue = (DoubleArray)transformProp.GetValueAsDoubles();
+#endif
                     break;
-                // The APT_List contains a list of sub asset properties with same type. 
+                //APT_Lis包含了一系列的子属性值 
 #if R2016
                 case AssetPropertyType.APT_List:
 #elif R2018
@@ -436,7 +418,6 @@ namespace RvtToObj
                             {
                                 AssetPropertyInteger intProp = subProp as AssetPropertyInteger;
                                 int intValue = intProp.Value;
-                                //objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
                             }
                             break;
 #if R2016
@@ -449,7 +430,6 @@ namespace RvtToObj
                             {
                                 AssetPropertyString intProp = subProp as AssetPropertyString;
                                 string intValue = intProp.Value;
-                                //objWriter.WriteLine(intProp.Name + "= " + intProp.Value.ToString() + ";" + intProp.IsReadOnly.ToString());
                                 if (intProp.Name == "unifiedbitmap_Bitmap" && intProp.Value != "")
                                 {
                                     map.Add(ttrgb);
@@ -477,12 +457,10 @@ namespace RvtToObj
 #endif
                     break;
                 default:
-                    //objWriter.WriteLine("居然有啥都不是类型的" + prop.Type.ToString());
                     break;
             }
 
-            // Get the connected properties.  
-            // please notice that the information of many texture stores here.  
+            //遍历连接属性，一般位图信息存储在这里  
             if (prop.NumberOfConnectedProperties == 0)
                 return;
             foreach (AssetProperty connectedProp in prop.GetAllConnectedProperties())
@@ -580,9 +558,8 @@ namespace RvtToObj
         {
             if (currentMterialId != node.MaterialId)
             {
-                var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
                 face.Add(-1);
-                face.Add(trgb);
+                face.Add(Util.ColorToInt(currentColor));
                 face.Add(currentTransparencyint);
                 face.Add(-2);
                 face.Add(-2);
@@ -611,9 +588,8 @@ namespace RvtToObj
             {
                 if (materialIndex == 0)
                 {
-                    var trgb = Util.ColorTransparencyToInt(currentColor, currentTransparencyint);
                     face.Add(-1);
-                    face.Add(trgb);
+                    face.Add(Util.ColorToInt(currentColor));
                     face.Add(currentTransparencyint);
                     face.Add(-2);
                     face.Add(-2);
@@ -798,7 +774,7 @@ namespace RvtToObj
                     int i9 = face[i++];
                     if (-1 == i1)
                     {
-                        s.WriteLine(_obj_usemtl, Util.ColorTransparencyString(Util.IntToColorTransparency(i2, out i3), i3));
+                        s.WriteLine(_obj_usemtl, Util.ColorTransparencyString(Util.IntToColor(i2), i3));
                     }
                     else
                     {
